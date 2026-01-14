@@ -347,6 +347,59 @@ describe("ZCL Utils", () => {
             result = Zcl.Utils.processAttributeWrite(cluster.getAttribute("pathLossExponent")!, Number.NaN);
             expect(result).toStrictEqual(0xffff);
         });
+
+        it("allows special values that exceed max constraint (startUpColorTemperature)", () => {
+            // startUpColorTemperature has max: 0xfeff (65279) but special value 0xffff (65535) for "SetColorTempToPreviousValue"
+            const cluster = Zcl.Utils.getCluster("lightingColorCtrl");
+            const attr = cluster.getAttribute("startUpColorTemperature")!;
+
+            // Value within normal range should be allowed
+            let result = Zcl.Utils.processAttributeWrite(attr, 0x0000);
+            expect(result).toStrictEqual(0x0000);
+
+            result = Zcl.Utils.processAttributeWrite(attr, 0xfeff); // max value
+            expect(result).toStrictEqual(0xfeff);
+
+            // Special value 0xffff should be allowed even though it exceeds max
+            result = Zcl.Utils.processAttributeWrite(attr, 0xffff);
+            expect(result).toStrictEqual(0xffff);
+
+            // Non-special value exceeding max should still throw
+            expect(() => Zcl.Utils.processAttributeWrite(attr, 0xff00)).toThrow(/requires max/i);
+        });
+
+        it("allows special values for startUpOnOff", () => {
+            // startUpOnOff has max: 0xff and special value 0xff for "SetToPreviousValue"
+            const cluster = Zcl.Utils.getCluster("genOnOff");
+            const attr = cluster.getAttribute("startUpOnOff")!;
+
+            // Normal values should work
+            let result = Zcl.Utils.processAttributeWrite(attr, 0x00);
+            expect(result).toStrictEqual(0x00);
+
+            // Special value 0xff should be allowed
+            result = Zcl.Utils.processAttributeWrite(attr, 0xff);
+            expect(result).toStrictEqual(0xff);
+        });
+
+        it("allows multiple special values for startUpCurrentLevel", () => {
+            // startUpCurrentLevel has max: 0xff and special values:
+            // - "MinimumDeviceValuePermitted" (0x00)
+            // - "SetToPreviousValue" (0xff)
+            const cluster = Zcl.Utils.getCluster("genLevelCtrl");
+            const attr = cluster.getAttribute("startUpCurrentLevel")!;
+
+            // Both special values should be allowed
+            let result = Zcl.Utils.processAttributeWrite(attr, 0x00);
+            expect(result).toStrictEqual(0x00);
+
+            result = Zcl.Utils.processAttributeWrite(attr, 0xff);
+            expect(result).toStrictEqual(0xff);
+
+            // Normal value in range should work
+            result = Zcl.Utils.processAttributeWrite(attr, 0x80);
+            expect(result).toStrictEqual(0x80);
+        });
     });
 
     describe("processAttributePreRead specific", () => {
@@ -439,6 +492,19 @@ describe("ZCL Utils", () => {
             expect(result).toStrictEqual(0x00);
             result = Zcl.Utils.processAttributePostRead(cluster.getAttribute("options")!, 0xff);
             expect(result).toStrictEqual(0xff);
+        });
+
+        it("allows special values that exceed max constraint on read (startUpColorTemperature)", () => {
+            // startUpColorTemperature has max: 0xfeff (65279) but special value 0xffff (65535)
+            const cluster = Zcl.Utils.getCluster("lightingColorCtrl");
+            const attr = cluster.getAttribute("startUpColorTemperature")!;
+
+            // Special value 0xffff should be allowed on read even though it exceeds max
+            const result = Zcl.Utils.processAttributePostRead(attr, 0xffff);
+            expect(result).toStrictEqual(0xffff);
+
+            // Non-special value exceeding max should still throw
+            expect(() => Zcl.Utils.processAttributePostRead(attr, 0xff00)).toThrow(/requires max/i);
         });
     });
 

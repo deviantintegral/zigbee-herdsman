@@ -330,7 +330,35 @@ function isMinOrMax<T>(entry: Attribute | Parameter, value: T): boolean {
     return false;
 }
 
+/**
+ * Check if value matches a defined special value for the entry.
+ * Special values take precedence over other restrictions (e.g., min/max).
+ * @see https://github.com/project-chip/zap/blob/master/zcl-builtin/dotdot/README.md
+ */
+function isSpecialValue<T>(entry: Attribute | Parameter, value: T): boolean {
+    if (!entry.special || typeof value !== "number") {
+        return false;
+    }
+
+    // Special values are stored as hex strings without "0x" prefix
+    // Convert the numeric value to a hex string for comparison
+    const valueHex = value.toString(16);
+
+    for (const [, specialValue] of entry.special) {
+        if (valueHex === specialValue) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function processRestrictions<T>(entry: Attribute | Parameter, value: T): void {
+    // Special values take precedence over min/max restrictions per ZCL spec
+    if (isSpecialValue(entry, value)) {
+        return;
+    }
+
     if (entry.min !== undefined && (value as number) < entry.min) {
         throw new Error(`${entry.name} requires min of ${entry.min}`);
     }
@@ -414,6 +442,11 @@ export function processAttributePostRead<T>(attribute: Attribute, value: T): T {
     if (value === ZCL_TYPE_INVALID_BY_TYPE[attribute.type]) {
         // if value is same as max or min, ignore invalid sentinel
         if (isMinOrMax(attribute, value)) {
+            return value;
+        }
+
+        // if value is a defined special value, it's valid and should not be treated as invalid
+        if (isSpecialValue(attribute, value)) {
             return value;
         }
 
